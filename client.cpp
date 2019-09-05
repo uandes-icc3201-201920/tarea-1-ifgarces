@@ -10,11 +10,11 @@
 
 using namespace std;
 
-char *socket_path = "\0hidden";
+//char *socket_path = "\0hidden";
 
 int main(int argc, char** argv)
 {
-	char* cmd = "";
+	char* cmd;
 	
 	struct sockaddr_un addr;
 	
@@ -27,7 +27,7 @@ int main(int argc, char** argv)
 	char buffer[200];
 	int new_socket, read_status;
 	
-	char* aux = "";
+	char* aux;
 	int clientCMDid = 0;    // clientCMDid sirve para que server sepa qué operación debe hacer con los datos del buffer, con el o los números.
 	int inputVals[3] = {0, 0, clientCMDid};
 	string CMDstr;
@@ -72,7 +72,9 @@ int main(int argc, char** argv)
 				inputVals[0] = atoi(strtok(NULL, ")"));
 				inputVals[1] = 0;
 				inputVals[2] = clientCMDid;
-				buffer = (char)inputVals[0];
+				//buffer = (char)inputVals[0];
+				sprintf(buffer, "%d", inputVals[0]);
+				strcat(buffer, ":");  // DOS PUNTOS PARA RECONOCER VALORES DISTINTOS: los key y vals que quiere client y el comando que quiere hacer con esos valores
 				
 				if (send(my_socket, buffer, sizeof(inputVals[0]), 0) == -1)
 				{
@@ -85,8 +87,18 @@ int main(int argc, char** argv)
 			{
 				clientCMDid = 1;
 				aux = (char*)strtok(cmd, "(");
-				inputVals = {(int)strtok(NULL, ","), (int)strtok(NULL, ")"), clientCMDid};   // de la forma {input_key, input_value}
-				buffer = (char*)inputVals;
+				//inputVals = {atoi(strtok(NULL, ",")), atoi(strtok(NULL, ")")), clientCMDid};   // de la forma {input_key, input_value}
+				inputVals[0] = atoi(strtok(NULL, ","));
+				inputVals[1] = atoi(strtok(NULL, ")"));
+				inputVals[2] = clientCMDid;
+				//buffer = (char*)inputVals;
+				sprintf(buffer, "%d", inputVals[0]);
+				strcat(buffer, ":");
+				sprintf(buffer, "%d", inputVals[1]);
+				strcat(buffer, ":");
+				sprintf(buffer, "%d", inputVals[2]);
+				strcat(buffer, ":");
+
 				
 				if (send(my_socket, buffer, sizeof(inputVals), 0) == -1)
 				{
@@ -121,8 +133,17 @@ int main(int argc, char** argv)
 		{
 			clientCMDid = 5;
 			
-			inputVals = {(int)strtok(NULL, ","), (int)strtok(NULL, ")"), clientCMDid};
-			buffer = (char*)inputVals;
+			//inputVals = {atoi(strtok(NULL, ",")), atoi(strtok(NULL, ")")), clientCMDid};
+			inputVals[0] = atoi(strtok(NULL, ","));
+			inputVals[1] = atoi(strtok(NULL, ")"));
+			inputVals[2] = clientCMDid;
+			//buffer = (char*)inputVals;
+			sprintf(buffer, "%d", inputVals[0]);
+			strcat(buffer, ":");
+			sprintf(buffer, "%d", inputVals[1]);
+			strcat(buffer, ":");
+			sprintf(buffer, "%d", inputVals[2]);
+			strcat(buffer, ":");
 			if (send(my_socket, buffer, sizeof(inputVals), 0) == -1)
 			{
 				perror("[!] Error, el cliente no pudo enviar la instrucción al servidor mediante el socket.");
@@ -134,8 +155,17 @@ int main(int argc, char** argv)
 		{
 			clientCMDid = 6;
 			
-			inputVals = {0, 0, clientCMDid};
-			buffer = (char*)inputVals;
+			//inputVals = {0, 0, clientCMDid};
+			inputVals[0] = 0;
+			inputVals[1] = 0;
+			inputVals[2] = clientCMDid;
+			//buffer = (char*)inputVals;
+			sprintf(buffer, "%d", inputVals[0]);
+			strcat(buffer, ":");
+			sprintf(buffer, "%d", inputVals[1]);
+			strcat(buffer, ":");
+			sprintf(buffer, "%d", inputVals[2]);
+			strcat(buffer, ":");
 			
 			if (send(my_socket, buffer, sizeof(inputVals), 0) == -1)
 			{
