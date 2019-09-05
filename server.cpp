@@ -1,5 +1,7 @@
 #include <iostream>
 #include <memory>
+
+
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -9,23 +11,27 @@ using namespace std;
 
 // Almacenamiento KV
 KVStore db;
+char* socket_path = "\0hidden";
 
-int main(int argc, char** argv) {	
-	
-	int sflag = 0;
+int main(int argc, char** argv)
+{
+	bool sflag = false;
 	int opt;
 	
 	// Procesar opciones de linea de comando
-    while ((opt = getopt (argc, argv, "s:")) != -1) {
+    while ((opt = getopt(argc, argv, "s:")) != -1)
+	{
         switch (opt)
 		{
 			/* Procesar el flag s si el usuario lo ingresa */
 			case 's':
-				sflag = 1;
+				sflag = true;
+				*socket_path = argv[1];    // intentando poner path dado por usuario
+				ulink(socket_path);
 				break;
 			default:
 				return EXIT_FAILURE;
-          }	    	
+        }	    	
     }
 	
 	// Uso elemental del almacenamiento KV:
@@ -45,7 +51,7 @@ int main(int argc, char** argv) {
 	// Nota: Debiera diseñarse una solución más robusta con una interfaz
 	// adecuada para acceder a la estructura.
 	db.insert(std::pair<unsigned long, Value>(1000, val));
-		
+	
 	// Imprimir lo que hemos agregado al mapa KV.
 	cout << db[1000].size << " " << (int) db[1000].data[0] << endl;
 	
