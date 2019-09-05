@@ -11,7 +11,7 @@ int main()
 	
 	if (clientConnected)    // conectado a tiempo
 	{
-		output << "OK"
+		output << "OK";
 	}
 	
 	else     // no se conectó a tiempo
