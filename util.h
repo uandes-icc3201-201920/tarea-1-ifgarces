@@ -3,15 +3,24 @@
 
 using namespace std;
 
-typedef unsigned char byte;
-
-// Esta estructura guarda el valor en la estructura K-V
-struct Value
+struct StructVal
 {
 	size_t size;
-	vector<byte> data;
+	vector<unsigned char> data;
+};
+//typedef map<unsigned long, StructVal> KVStore;
+
+class KeyValue
+{
+	public:
+		int key;
+		char* value;
+		
+		KeyValue(int k, char* v)   // constructor
+		{
+			key = k;
+			value = v;
+		}
 };
 
-// Definición de la estructura K-V utilizada
-// Clave es numérica y valor es dado por estructura Value.
-typedef map<unsigned long, Value> KVStore;
+typedef map<int, KeyValue> KVStore;

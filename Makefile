@@ -1,14 +1,20 @@
-client_exe: server_exe timer_exe delete_socket
-	g++ -o client_exe client.cpp
+FLAGS = -Wall
 
-server_exe:
-	g++ -o server_exe server.cpp
-	
-timer_exe:
-	#g++ -o timer_exe timer.cpp
-	
+all: timer *.cpp *.h
+	g++ -o client client.cpp $(FLAGS) -pthread
+	g++ -o server server.cpp $(FLAGS)
+
+timer:
+	#g++ -o timer timer.cpp  $(FLAGS)
+
 delete_socket:
 	rm -f socket
-	
+
 clean: delete_socket
-	rm -f client_exe server_exe timer_exe *.exe.stackdump *.o
+	rm -f client server timer *.exe.stackdump *.o *.exe
+
+test: clean all
+	./server
+
+# Ver cap. 30.2 libro
+# https://www.geeksforgeeks.org/socket-programming-cc/
