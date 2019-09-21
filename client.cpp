@@ -1,26 +1,36 @@
 #include <iostream>
 #include <memory>
-#include <string>
-
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include "database_struct.cpp"    // el "util.h"
 #include <arpa/inet.h>
-#include "util.h"
 #include <pthread.h>
+
+#define MAX_CONNECTIONS 10
+#define BUFFSIZE 200
 
 using namespace std;
 
 char* socket_path = (char*)"/tmp/DB.tuples.sock";
 int my_socket = socket(AF_UNIX, SOCK_STREAM, 0);
-const int BuffSize = 200;
+
+void PleaseCleanThisString(char* s)
+{
+	for (unsigned int i=0; i<strlen(s); i++)
+	{
+		s[i] = '\0';
+	}
+}
 
 int main(int argc, char** argv)
 {
 	if (my_socket == -1)
 	{
 		perror("Socket error");
-		return -1;
+		return 1;
 	}
 	struct sockaddr_un addr;
 	*addr.sun_path = *socket_path;
@@ -29,28 +39,26 @@ int main(int argc, char** argv)
 	addr.sun_family = AF_UNIX;
 	strncpy(addr.sun_path, "socket", sizeof(addr.sun_path)-1);	
 	
-	char buffer[BuffSize];
+	char buffer[BUFFSIZE];
 	int new_socket, read_status;
+	int send_status;
 	pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
 	
-	char* CMD;
-	char* aux = (char*)"";
-	char* clientCMDid = (char*)"0";    // clientCMDid sirve para que server sepa qué operación debe hacer con los datos del buffer, con el o los números.
-	char* inputVals[3];  // contiene los parámetros de la función que se quiere, como el "key" y "value" del comando "insert(key, value)"
-	string CMDstr;
+	char CMD[100] = "";
+	char inputVals[3][50] = {};  // formato: {comando_cliente, argumento1_instrucc, argumento2_instrucc}
 	
 	while (strcmp(CMD, "quit") != 0)
 	{
-		cout << "clinet > ";
+		cout << "client > ";
+		//pthread_mutex_lock(&client_mutex);
 		scanf("%s", CMD);
-		CMDstr = CMD;
 		
 		if (strcmp(CMD, "connect") == 0)  // conectarse al servidor
 		{
 			if (connect(my_socket, (struct sockaddr*)&addr, sizeof(addr)) == -1)
 			{
 				perror("Connect error");
-				return -1;
+				return 1;
 			}
 			cout << "Connection successful with server" << endl;
 		}
@@ -61,126 +69,98 @@ int main(int argc, char** argv)
 			cout << "Disconnected from server" << endl;
 		}
 		
-		else if (strcmp(CMD, "quit") == 0)    // cerrar programilla
+		else if (strcmp(CMD, "quit") == 0)  // terminar programa
 		{
 			unlink((const char*)(struct sockaddr*)&addr);
 			return 0;
 		}
 		
-		else if (CMDstr.find("insert") != string::npos)   // insertar cosa
+		else if (strstr(CMD, "insert") != nullptr)
 		{
-			pthread_mutex_lock(&client_mutex);
-			if (CMDstr.find(",") == string::npos)     // un argumento insert(value)
+			if (strstr(CMD, ",") == nullptr)     // un argumento: insert(value)
 			{
-				clientCMDid = (char*)"insert_1";
-				aux = (char*)strtok(CMD, "(");
-				inputVals[0] = (char*)strtok(NULL, ")");  // "value" que quiere insertar
-				inputVals[1] = NULL;
-				inputVals[2] = NULL;
-				sprintf(buffer, "%s:%s:%s:%s", clientCMDid, inputVals[0], inputVals[1], inputVals[2]);
+				strcpy(inputVals[0], "insert_1");
+				strcpy(inputVals[1], strtok(CMD, "("));
+				strcpy(inputVals[1], strtok(NULL, ")"));  // <value>
+				strcpy(inputVals[2], "");
+			}
+			
+			else   // dos argumentos: insert(key, value)
+			{
+				strcpy(inputVals[0], "insert_2");
+				strcpy(inputVals[1], strtok(CMD, "("));
+				strcpy(inputVals[1], strtok(NULL, ","));  // <key>
+				strcpy(inputVals[2], strtok(NULL, ")"));  // <value>
+			}
+		}
+		
+		else if (strstr(CMD, "get") != nullptr)
+		{			
+			strcpy(inputVals[0], "get");
+			
+		}
+		
+		else if (strstr(CMD, "peek") != nullptr)
+		{			
+			strcpy(inputVals[0], "peek");
+			
+		}
+		
+		else if (strstr(CMD, "update") != nullptr)
+		{			
+			strcpy(inputVals[0], "update");
+			
+		}
+		
+		else if (strstr(CMD, "delete") != nullptr)
+		{			
+			strcpy(inputVals[0], "delete");
+			strcpy(inputVals[1], strtok(CMD, ","));
+			strcpy(inputVals[2], strtok(NULL, ")"));
+		}
+		
+		else if (strcmp(CMD, "list") == 0)
+		{
+			strcpy(inputVals[0], "list");
+			strcpy(inputVals[1], "");
+			strcpy(inputVals[2], "");
+			
+			
+		}
 				
-				cout << "Client wrote on buffer: " << buffer << endl;
-				
-				if (send(my_socket, buffer, sizeof(inputVals[0]), 0) == -1)
-				{
-					perror("Socket send error from client");
-					return -1;
-				}
-			}
-			
-			else   // dos argumentos insert(key, value)
-			{
-				clientCMDid = (char*)"insert_2";
-				aux = (char*)strtok(CMD, "(");
-				inputVals[0] = strtok(NULL, ",");
-				inputVals[1] = strtok(NULL, ",");
-				sprintf(buffer, "%s:%s:%s", clientCMDid, inputVals[0], inputVals[1]);
-				
-				if (send(my_socket, buffer, sizeof(inputVals), 0) == -1)
-				{
-					perror("Socket send error from client");
-					return -1;
-				}
-			}
-			
-			// enviando a servidor
-			if (send(my_socket, buffer, sizeof(inputVals), 0) == -1)
-			{
-				perror("Socket send error in client");
-				return -1;
-			}
-			pthread_mutex_unlock(&client_mutex);
-		}
-		
-		else if (CMDstr.find("get") != string::npos)
-		{
-			clientCMDid = (char*)"get";
-			
-			
-		}
-		
-		else if (CMDstr.find("peek") != string::npos)
-		{
-			clientCMDid = (char*)"peek";
-			
-			
-		}
-		
-		else if (CMDstr.find("update") != string::npos)
-		{
-			clientCMDid = (char*)"update";
-			
-			
-		}
-		
-		else if (CMDstr.find("delete") != string::npos)
-		{
-			clientCMDid = (char*)"delete";
-			
-			//inputVals = {atoi(strtok(NULL, ",")), atoi(strtok(NULL, ")")), clientCMDid};
-			inputVals[0] = strtok(NULL, ",");
-			inputVals[1] = strtok(NULL, ")");
-			inputVals[2] = clientCMDid;
-			//buffer = (char*)inputVals;
-			sprintf(buffer, "%s", inputVals[0]);
-			strcat(buffer, ":");
-			sprintf(buffer, "%s", inputVals[1]);
-			strcat(buffer, ":");
-			sprintf(buffer, "%s", inputVals[2]);
-			strcat(buffer, ":");
-			if (send(my_socket, buffer, sizeof(inputVals), 0) == -1)
-			{
-				perror("Socket send error from client");
-				return -1;
-			}
-		}
-		
-		else if (CMDstr == "list")
-		{
-			clientCMDid = (char*)"list";
-			
-			//inputVals = {0, 0, clientCMDid};
-			inputVals[0] = 0;
-			inputVals[1] = 0;
-			inputVals[2] = clientCMDid;
-			//buffer = (char*)inputVals;
-			sprintf(buffer, "%s", inputVals[0]);
-			strcat(buffer, ":");
-			sprintf(buffer, "%s", inputVals[1]);
-			strcat(buffer, ":");
-			sprintf(buffer, "%s", inputVals[2]);
-			strcat(buffer, ":");
-			
-			if (send(my_socket, buffer, sizeof(inputVals), 0) == -1)
-			{
-				perror("Socket send error in client");
-				return -1;
-			}
-		}
 		else
 		{
-			cout << "[!] Error, unknown command \"" << CMD << "\""<< endl;
+			cout << "[!] Error, comando \"" << CMD << "\"" << " no reconocido (use minísculas)." << endl;
 		}
+		
+		/*--- PONIENDO LA PETICIÓN DEL CLIENTE EN EL BUFFER HACIA EL SERVIDOR ---*/
+		sprintf(buffer, "%s:%s:%s", inputVals[0], inputVals[1], inputVals[2]);
+		// formato buffer: <comando_cliente>:<argumento1_instrucc>:<argumento2_instrucc>
+		
+		send_status = send(my_socket, buffer, sizeof(inputVals), 0);
+		
+		cout << "  (i) Client wrote on buffer \"" << buffer << "\" with status " << send_status << "\n" << endl;
+			
+		if (send_status == -1)
+		{
+			perror("Socket send error in client");
+			return 1;
+		}
+		
+		
+		/*--- ESPERANDO RESPUESTA DEL SERVIDOR ---*/
+		cout << "\033[1;36mAwaiting server answer...\033[0m" << endl;
+		read_status = read(my_socket, buffer, BUFFSIZE);
+		//read_status = listen(my_socket, MAX_CONNECTIONS);
+		if (read_status == -1)
+		{
+			perror("Socket read error in client");
+			return 1;
+		}
+		cout << "  (i) Client read server answer \"" << buffer << "\"\n" << endl;
+		
+		
+		//pthread_mutex_unlock(&client_mutex);
 	}
 
 	return 0;	
