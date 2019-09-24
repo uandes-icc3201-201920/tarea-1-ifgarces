@@ -101,10 +101,14 @@ int main(int argc, char** argv)
 			read_status = read(new_socket, buffer, sizeof(buffer));
 			//read_status = listen(my_socket, MAX_CONNECTIONS);
 			//read_status = receive(new_socket, buffer, sizeof(buffer), 0);
+			
 			if (read_status < 0) { break; }
+			if (read_status == -1) { perror("Socket read error in server"); return 1; }
+			if (read_status == 0) { perror("Connection closed"); close(new_socket); return 1; }  // retorna?
 			
 			cout << "  (i) Server read from buffer \"" << buffer << "\" with status " << read_status << "\n" << endl;
 			
+			/* Leyendo buffer, separando args por : dados por el cliente */
 			aux = strtok(buffer, ":");
 			if (aux != NULL)
 			{
@@ -119,19 +123,15 @@ int main(int argc, char** argv)
 				j++;
 			}
 			
-			// cout << "[test] printing decode:" << endl;
-			// Print_codifications(decode, 3);
-			// cout << endl;
-			
-			/* COMANDO: insert(value) */
+			/* (1°) COMANDO: insert(value) */
 			if (strcmp(decode[0], "insert_1") == 0)
 			{                                   // decode = { "insert_1", <valor (char*)>, "" }
 				DB[DB_size+1] = KVStore(DB_size+1, decode[1]);
 				sprintf(server_answer, "%d", DB_size+1);
 			}
 			
-			/* COMANDO: insert(key, value) */
-			if (strcmp(decode[0], "insert_2") == 0)
+			/* (2°) COMANDO: insert(key, value) */
+			else if (strcmp(decode[0], "insert_2") == 0)
 			{                                    // decode = { "insert_2", <llave>, <valor> }
 				if (Search_key(DB, DB_size, atoi(decode[1])) == -1)
 				{
@@ -144,8 +144,8 @@ int main(int argc, char** argv)
 				
 			}
 			
-			/* COMANDO: get(key) */
-			if (strcmp(decode[0], "get") == 0)
+			/* (3°) COMANDO: get(key) */
+			else if (strcmp(decode[0], "get") == 0)
 			{
 				search_result = Search_key(DB, DATABASE_SIZE, atoi(decode[1]));
 				if (search_result == -1)
@@ -158,8 +158,8 @@ int main(int argc, char** argv)
 				}
 			}
 			
-			/* COMANDO: peek(value) */
-			if (strcmp(decode[0], "peek") == 0)
+			/* (4°) COMANDO: peek(value) */
+			else if (strcmp(decode[0], "peek") == 0)
 			{
 				if (Search_key(DB, DATABASE_SIZE, atoi(decode[1])) == -1)
 				{
@@ -171,8 +171,8 @@ int main(int argc, char** argv)
 				}
 			}
 			
-			/* COMANDO: update(key, value) */
-			if (strcmp(decode[0], "update") == 0)
+			/* (5°) COMANDO: update(key, value) */
+			else if (strcmp(decode[0], "update") == 0)
 			{
 				search_result = Search_key(DB, DATABASE_SIZE, atoi(decode[1]));
 				if (search_result == -1)
@@ -185,41 +185,36 @@ int main(int argc, char** argv)
 				}
 			}
 			
-			/* COMANDO: delete(key) */
-			if (strcmp(decode[0], "delete") == 0)
+			/* (6°) COMANDO: delete(key) */
+			else if (strcmp(decode[0], "delete") == 0)
 			{
 				
 			}
 			
-			/* COMANDO: list */
-			if (strcmp(decode[0], "list") == 0)
+			/* (7°) COMANDO: list */
+			else if (strcmp(decode[0], "list") == 0)
 			{
-				cout << "KEY\tVALUE" << endl;
-				strcpy(buffer, "");
+				strcpy(server_answer, "");   // vacía la respuesta para rellenarla con los elementos.
+				
+				cout << "[test]\n  KEY\tVALUE" << endl;   // [TEST]
 				for (unsigned int k=0; k<DB_size; k++)
 				{
-					cout << DB[k].key << "\t" << DB[k].value << endl;
+					if (strlen(server_answer) > BUFF_SIZE)
+					{
+						printf("[!] Error, buffer overflow: server_answer is too large: %s (lenght: %d)", server_answer, (int)strlen(server_answer));
+						return 1;
+					}
+					printf("  %d\t%s\n", DB[k].key, DB[k].value);   // [TEST]
 					sprintf(line, "%d,%s;", DB[k].key, DB[k].value);  // formato respuesta (cada línea): {<key>, <value>;}
-					strcat(buffer, line);
+					strcat(server_answer, line);
 				}
 			}
 			
-			if (read_status == -1)
-			{
-				perror("Socket read error in server");
-				return 1;
-			}
-			
-			else if (read_status == 0)
-			{
-				perror("Connection closed");
-				close(new_socket);
-				return 1;
-			}
-			
+			// a este punto hizo lo que el cliente pidió y lo puso en server_answer -
+			// para colocarlo a continuación en el buffer y mandar la respuesta.
 			strcpy(buffer, server_answer);
-			//send_status = send(new_socket, &buffer, sizeof(buffer), 0);
-			send_status = write(new_socket, buffer, strlen(buffer));
+			send_status = send(new_socket, buffer, sizeof(buffer), 0);
+			//send_status = write(new_socket, buffer, strlen(buffer));
 			if (send_status == -1)
 			{
 				perror("Socket send error in server");

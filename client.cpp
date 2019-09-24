@@ -49,7 +49,7 @@ int main(int argc, char** argv)
 	
 	while (strcmp(CMD, "quit") != 0)
 	{
-		cout << "client > ";
+		printf("client > ");
 		//pthread_mutex_lock(&client_mutex);
 		scanf("%s", CMD);
 		
@@ -60,13 +60,14 @@ int main(int argc, char** argv)
 				perror("Connect error");
 				return 1;
 			}
-			cout << "Connection successful with server" << endl;
+			printf("Connection successful with server\n");
+			continue;
 		}
 
 		else if (strcmp(CMD, "disconnect") == 0)    // desconectarse del servidor
 		{
 			unlink((const char*)(struct sockaddr*)&addr);
-			cout << "Disconnected from server" << endl;
+			printf("Disconnected from server\n");
 		}
 		
 		else if (strcmp(CMD, "quit") == 0)  // terminar programa
@@ -82,7 +83,7 @@ int main(int argc, char** argv)
 				strcpy(inputVals[0], "insert_1");
 				strcpy(inputVals[1], strtok(CMD, "("));
 				strcpy(inputVals[1], strtok(NULL, ")"));  // <value>
-				strcpy(inputVals[2], "");
+				strcpy(inputVals[2], "<null>");    // no existe segundo argumento de la instrucción insert(value). Para que el servidor cache, se vuelve "<null>" por convención
 			}
 			
 			else   // dos argumentos: insert(key, value)
@@ -94,53 +95,61 @@ int main(int argc, char** argv)
 			}
 		}
 		
-		else if (strstr(CMD, "get") != nullptr)
+		else if (strstr(CMD, "get") != nullptr)   // CMD ~ get(<key>)
 		{			
 			strcpy(inputVals[0], "get");
-			
+			strcpy(inputVals[1], strtok(CMD, "("));
+			strcpy(inputVals[1], strtok(NULL, ")"));
+			strcpy(inputVals[2], "<null>");
 		}
 		
-		else if (strstr(CMD, "peek") != nullptr)
+		else if (strstr(CMD, "peek") != nullptr)    // CMD ~ peek(<key>)
 		{			
 			strcpy(inputVals[0], "peek");
-			
+			strcpy(inputVals[1], strtok(CMD, "("));
+			strcpy(inputVals[1], strtok(NULL, ")"));
+			strcpy(inputVals[2], "<null>");
 		}
 		
-		else if (strstr(CMD, "update") != nullptr)
-		{			
+		else if (strstr(CMD, "update") != nullptr)   // CMD ~ update(<key>, <value>)
+		{
 			strcpy(inputVals[0], "update");
-			
+			strcpy(inputVals[1], strtok(CMD, "("));
+			strcpy(inputVals[1], strtok(NULL, ","));
+			strcpy(inputVals[2], strtok(NULL, ")"));
 		}
 		
 		else if (strstr(CMD, "delete") != nullptr)
 		{			
 			strcpy(inputVals[0], "delete");
-			strcpy(inputVals[1], strtok(CMD, ","));
+			strcpy(inputVals[1], strtok(CMD, "("));
+			strcpy(inputVals[1], strtok(NULL, ","));
 			strcpy(inputVals[2], strtok(NULL, ")"));
 		}
 		
 		else if (strcmp(CMD, "list") == 0)
 		{
 			strcpy(inputVals[0], "list");
-			strcpy(inputVals[1], "");
-			strcpy(inputVals[2], "");
-			
-			
+			strcpy(inputVals[1], "<null>");
+			strcpy(inputVals[2], "<null>");
 		}
 				
 		else
 		{
-			cout << "[!] Error, comando \"" << CMD << "\"" << " no reconocido (use minísculas)." << endl;
+			printf("[!] Error, comando \"%s\" no reconocido (use minísculas, por favor, caballero)\n", CMD);
 		}
 		
 		/*--- PONIENDO LA PETICIÓN DEL CLIENTE EN EL BUFFER HACIA EL SERVIDOR ---*/
 		sprintf(buffer, "%s:%s:%s", inputVals[0], inputVals[1], inputVals[2]);
-		// formato buffer: <comando_cliente>:<argumento1_instrucc>:<argumento2_instrucc>
+		/*
+			FORMATO BUFFER DESDE CLIENTE:
+			<comando_cliente>:<argumento1_instrucc>:<argumento2_instrucc>
+		*/
 		
 		send_status = send(my_socket, buffer, sizeof(inputVals), 0);
 		
 		cout << "  (i) Client wrote on buffer \"" << buffer << "\" with status " << send_status << "\n" << endl;
-			
+		
 		if (send_status == -1)
 		{
 			perror("Socket send error in client");
@@ -150,7 +159,7 @@ int main(int argc, char** argv)
 		
 		/*--- ESPERANDO RESPUESTA DEL SERVIDOR ---*/
 		cout << "\033[1;36mAwaiting server answer...\033[0m" << endl;
-		read_status = read(my_socket, buffer, BUFFSIZE);
+		read_status = read(my_socket, buffer, sizeof(buffer));
 		//read_status = listen(my_socket, MAX_CONNECTIONS);
 		if (read_status == -1)
 		{
@@ -158,7 +167,6 @@ int main(int argc, char** argv)
 			return 1;
 		}
 		cout << "  (i) Client read server answer \"" << buffer << "\"\n" << endl;
-		
 		
 		//pthread_mutex_unlock(&client_mutex);
 	}
