@@ -3,7 +3,7 @@ Ignacio F. Garcés Santander
 
 
 ### 0. COMANTERIOS
-** No alcancé a probarlo en Linux por temas de tiempo y porque el computador se queda pegado la mayoría de las veces al abrir la máquina virtual con Linux, y si es que funciona, toma como 10 minutos abrirlo, y tengo que cerrar todos los otros procesos del computador para que medio aguante, lo que dificulta enormemente el trabajo. Por favor considerar en caso de que no funcione bien en Linux. Considerar también ojalá que lo hice solo.
+** No alcancé a probarlo en Linux por temas de tiempo y porque el computador se queda pegado la mayoría de las veces al abrir la máquina virtual con Linux, y si es que funciona, toma como 10 minutos abrirlo, y tengo que cerrar todos los otros procesos del computador para que medio aguante, lo que dificulta enormemente el trabajo. Por favor considerar en caso de que no funcione bien en Linux. Considerar también que hice la tarea solo.
 
 
 ### 1. DIFICULTADES ENCONTRADAS
