@@ -22,7 +22,7 @@ ColorMaster mycolor = ColorMaster();  // para imprimir colores
 
 // diccionario con PIDs y estado (conectado/desconectado del servidor).
 map<int, string> ClientsMap;  // contiene { <socket>, <estado de conexión> } para cada cliente
-
+map<pid_t, string> ClientsMapPID; // contiene { <PID>, <estado de conexión> }. Sirve para que no trate de ejecutar un comando si no está conectado primero.
 
 int main(int argc, char** argv)
 {
@@ -40,7 +40,7 @@ int main(int argc, char** argv)
 	char buffer[BUFF_SIZE];
 	int read_status, send_status;
 	pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
-	pthread_cond_t request_processed_by_server = PTHREAD_COND_INITIALIZER;
+	//pthread_cond_t request_processed_by_server = PTHREAD_COND_INITIALIZER;
 	
 	char CMD[200] = "";
 	char inputVals[4][50] = {};  // formato: { comando_cliente, argumento1_instrucc, argumento2_instrucc, clientePID }
@@ -61,12 +61,12 @@ int main(int argc, char** argv)
 			}
 			printf("Client PID %d connected successfully with server\n", getpid());
 			
-			ClientsMap.insert(pair<pid_t, string>(getpid(), "connected")); //ClientsMap[getpid()] = "connected";
+			ClientsMapPID.insert(pair<pid_t, string>(getpid(), "connected")); //ClientsMap[getpid()] = "connected";
 			pthread_mutex_unlock(&client_mutex);
 			continue;
 		}
 		
-		else if ( (ClientsMap[getpid()] == "disconnected") && (strcmp(CMD, "quit") != 0) )
+		else if ( (ClientsMapPID[getpid()] != "connected" && ClientsMapPID[getpid()] != "processing") && (strcmp(CMD, "quit") != 0) )
 		{   // se ejecuta si trata de hacer algo distinto de connect y no está conectado
 			printf("[!] Error, el cliente PID %d no está conectado. Conéctese para ejecutar los otros comandos.\n", (int)getpid());
 			pthread_mutex_unlock(&client_mutex);
@@ -88,8 +88,8 @@ int main(int argc, char** argv)
 		else if (strcmp(CMD, "quit") == 0)  // terminar programa
 		{
 			unlink((const char*)(struct sockaddr*)&addr);
-			//kill(getpid(), 1);  // revisar
-			break;  // por si acaso el thread no muere? quizás cuando es el último?
+			//kill(getpid(), 1);
+			break;  // termina proceso cliente
 		}
 		
 		else if (strstr(CMD, "insert") != nullptr)
@@ -159,7 +159,7 @@ int main(int argc, char** argv)
 			continue;
 		}
 		
-		sprintf(inputVals[3], "%d", pthread_self());
+		sprintf(inputVals[3], "%d", getpid());
 		
 		/*--- PONIENDO LA PETICIÓN DEL CLIENTE EN EL BUFFER HACIA EL SERVIDOR ---*/
 		sprintf(buffer, "%s:%s:%s:%s", inputVals[0], inputVals[1], inputVals[2], inputVals[3]);
@@ -173,7 +173,6 @@ int main(int argc, char** argv)
 			perror("Socket send error in client");
 			return 1;
 		}
-		
 		
 		/*--- ESPERANDO RESPUESTA DEL SERVIDOR ---*/
 		//mycolor.print_str("cyan", "Awaiting server answer...");  //cout << "\033[1;36mAwaiting server answer...\033[0m" << endl;

@@ -22,11 +22,4 @@ runc: clean
 	
 test: clean
 	g++ -o T TEST.cpp $(MYFLAGS)
-	
-	# FORZAR QUE NO SE REPITA UNA LLAVE PARA UN VALOR
-	# NO OLVIDAR QUE connect DEL CLIENTE REQUIERE DE LA RUTA DEL SOCKET
 	./T
-
-# Ver cap. 30.2 libro
-# https://www.geeksforgeeks.org/socket-programming-cc/
-# https://www.geeksforgeeks.org/mutex-vs-semaphore/
