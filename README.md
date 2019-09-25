@@ -18,6 +18,7 @@ Ignacio F. Garcés Santander
 
 
 ### 3. PROBLEMAS CONOCIDOS
+- Si algún cliente muere, el servidor también.
 - Por algún motivo, si se usan las flechas direccionales en la consola al escribir el input del cliente, el servidor enloquece un poco. Es decir, si trato de escribir los paréntesis () primero, luego devolverme con la flecha para rellenar los parámetros del comando que esté escribiendo, ocurren problemas en el `strtok()` y por lo tanto da un resultado inesperado. Aunque puede que no sea problema de mi código.
 - Solo se reconocen los comandos en miníscula, y sin espacios. Por ejemplo, no se reconoce `INSERT(0,hola)` ni `insert (0,hola)`. O quizás sí pero cosas raras pasarían.
 
