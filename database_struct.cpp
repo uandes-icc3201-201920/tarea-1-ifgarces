@@ -1,3 +1,5 @@
+// SIN USAR
+
 # include "database_struct.h"
 
 KeyValue::KeyValue(int k, char* v)   // constructor

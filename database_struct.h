@@ -1,78 +1,84 @@
-#ifndef __DB__
-#define __DB__
+#ifndef este_es_el_util_punto_h
+#define este_es_el_util_punto_h
 
 #include <map>
 #include <vector>
 #include <random>
 #include <string.h>
+#include <iterator>
 
 using namespace std;
 
-/*
-typedef struct KeyValue
+/* struct KeyValue
 {
 	size_t size;
-	vector<unsigned char> data;
-} KeyValue;
-typedef map<unsigned long, KeyValue> KVStore;
+	char* data;
+}; */
+typedef map<int, char*> KVStore;
+typedef pair<int, char*> KVpair;  // para los insert del map
 
-void Fill_data_base(KVStore* database, unsigned int itemsNum)
+void KV_fill(KVStore* database)
 {
-	struct StructVal newStrData;
-	char letters[26] = "abcdefghijklmnopqrstuvwxyz";
-	char randWord[5];
-	
-	for (int index=0; index<itemsNum; index++)
+	database->insert(KVpair(0, (char*)"hola"));
+	database->insert(KVpair(1, (char*)"compañero"));
+	database->insert(KVpair(4, (char*)"safdgh"));
+}
+
+int KV_append(KVStore* database, char* new_value)    // agrega un elemento al final, en el primer key que tenga value NULL, si es que hay.
+{                                                    // retorna key donde se insertó el elemento
+	KVStore::iterator helper;
+	for (helper = database->begin(); helper != database->end(); ++helper)
 	{
-		randWord = "";
-		for (int k=0; k<5; k++)
+		if (helper->second == NULL)
 		{
-			strcat(randWord, (char*)letters[rand()%25]);
+			database->insert( KVpair(helper->first, new_value) );
+			return helper->first;
 		}
-		//newStrData.data = (char)rand()%100;
-		newStrData.data = randWord;
-		newStrData.size = sizeof(newStrData.data);
-		database->insert(KVStore(index, newStrData));
 	}
+	// llega hasta aquí si es que todas las llaves que hay tienen un value no nulo, válido
+	
+	database->insert( KVpair(database->size(), new_value) );
+	return database->size()-1;
 }
 
-char* Show_map_values(KVStore* database)    // https://www.geeksforgeeks.org/map-associative-containers-the-c-standard-template-library-stl/
-{
-	KVStore::iterator ITR
-	cout << ""
-	for (ITR = KVStore->begin(); ITR != KVStore->end(); ++ITR)
+char* KV_get_printable(KVStore* database, int max_str_size)
+{    // una especie de to_string
+	char* output = (char*)malloc(sizeof(char)*max_str_size);
+	char aux[100] = "";
+	KVStore::iterator helper;
+	strcpy(output, "KEY\tVALUE\n");
+	for (helper = database->begin(); helper != database->end(); ++helper)
 	{
-		cout << ITR->first << "\t" << ITR->second << "\n";
+		sprintf(aux, "%d\t%s\n", helper->first, helper->second);
+		strcat(output, aux);
 	}
-	cout << endl;
+	return output;
 }
+
+bool KV_searchKey(KVStore* database, int wanted_key)  // retorna true si existe
+{
+	KVStore::iterator helper;
+	for (helper = database->begin(); helper != database->end(); ++helper)
+	{
+		if (helper->first == wanted_key)
+		{
+			return (helper->second != NULL);
+		}
+	}
+	return (false);  // retorna false si la llave está asociada a un NULL o si no existe la llave
+}
+
+
+/*
+	Referencias:
+	- https://www.geeksforgeeks.org/map-associative-containers-the-c-standard-template-library-stl/
 */
 
-typedef class KeyValue
-{
-	public:
-		int key;
-		char* value;
-		KeyValue(int, char*);
-		KeyValue(int);
-		KeyValue();
-} KVStore;
-
-int Search_key(KVStore db[], unsigned int db_size, int key_searched)
-{   // retorna índice del elemento en DB, a menos que no exista, en cuyo caso retorna -1
-	for (unsigned int n=0; n<db_size; n++)
-	{
-		if (db[n].key == key_searched) { return n; }
-	}
-	return -1;
-}
-
-void Print_codifications(char lines[][50], int linesNum)
+/* void Print_codifications(char lines[][50], int linesNum)
 {
 	for (int w=0; w<linesNum; w++)
 	{
 		cout << "\"" << lines[w] << "\"" << endl;
 	}
-}
-
+} */
 #endif

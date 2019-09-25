@@ -1,23 +1,31 @@
-FLAGS = -Wall
+MYFLAGS = -Wall
 
 all: clean *.cpp *.h
-	g++ -o client client.cpp $(FLAGS) -pthread
-	g++ -o server server.cpp $(FLAGS)
-	#g++ -o timer timer.cpp  $(FLAGS)
+	reset
+	g++ -o client client.cpp $(MYFLAGS) -pthread
+	g++ -o server server.cpp $(MYFLAGS)
+	#g++ -o timer timer.cpp  $(MYFLAGS)
 	
 delete_socket:
 	rm -f socket
 
 clean: delete_socket
 	rm -f client server timer *.exe.stackdump *.o *.exe
-
-tests: clean
-	g++ -o server server.cpp
+	
+runs: clean
+	g++ -o server server.cpp $(MYFLAGS)
 	./server
 
-testc: clean
-	g++ -o client client.cpp
+runc: clean
+	g++ -o client client.cpp $(MYFLAGS)
 	./client
+	
+test: clean
+	g++ -o T TEST.cpp $(MYFLAGS)
+	
+	# FORZAR QUE NO SE REPITA UNA LLAVE PARA UN VALOR
+	# NO OLVIDAR QUE connect DEL CLIENTE REQUIERE DE LA RUTA DEL SOCKET
+	./T
 
 # Ver cap. 30.2 libro
 # https://www.geeksforgeeks.org/socket-programming-cc/

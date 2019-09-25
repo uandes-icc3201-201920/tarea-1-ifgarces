@@ -5,25 +5,24 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include "database_struct.cpp"    // el "util.h"
-#include <arpa/inet.h>
 #include <pthread.h>
+#include "database_struct.h"
+#include "ColorMaster.cpp"
+#include <arpa/inet.h>
 
-#define MAX_CONNECTIONS 10
-#define BUFFSIZE 200
+#define MAX_CONNECTIONS 30
+#define BUFF_SIZE 3000
 
 using namespace std;
 
 char* socket_path = (char*)"/tmp/DB.tuples.sock";
 int my_socket = socket(AF_UNIX, SOCK_STREAM, 0);
 
-void PleaseCleanThisString(char* s)
-{
-	for (unsigned int i=0; i<strlen(s); i++)
-	{
-		s[i] = '\0';
-	}
-}
+ColorMaster mycolor = ColorMaster();  // para imprimir colores
+
+// diccionario con PIDs y estado (conectado/desconectado del servidor).
+map<pid_t, string> ClientsMap;
+
 
 int main(int argc, char** argv)
 {
@@ -34,23 +33,22 @@ int main(int argc, char** argv)
 	}
 	struct sockaddr_un addr;
 	*addr.sun_path = *socket_path;
-	//int my_socket = socket(AF_UNIX, SOCK_STREAM, 0);
 	memset(&addr, 0, sizeof(addr));
 	addr.sun_family = AF_UNIX;
 	strncpy(addr.sun_path, "socket", sizeof(addr.sun_path)-1);	
 	
-	char buffer[BUFFSIZE];
-	int new_socket, read_status;
-	int send_status;
+	char buffer[BUFF_SIZE];
+	int read_status, send_status;
 	pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
 	
-	char CMD[100] = "";
-	char inputVals[3][50] = {};  // formato: {comando_cliente, argumento1_instrucc, argumento2_instrucc}
+	char CMD[200] = "";
+	char inputVals[4][50] = {};  // formato: { comando_cliente, argumento1_instrucc, argumento2_instrucc, clientePID }
+	char* temp_aux;
 	
 	while (strcmp(CMD, "quit") != 0)
 	{
-		printf("client > ");
-		//pthread_mutex_lock(&client_mutex);
+		printf("\nclient > ");
+		pthread_mutex_lock(&client_mutex);
 		scanf("%s", CMD);
 		
 		if (strcmp(CMD, "connect") == 0)  // conectarse al servidor
@@ -60,20 +58,37 @@ int main(int argc, char** argv)
 				perror("Connect error");
 				return 1;
 			}
-			printf("Connection successful with server\n");
+			printf("Client PID %d connected successfully with server\n", getpid());
+			
+			ClientsMap.insert(pair<pid_t, string>(getpid(), "connected")); //ClientsMap[getpid()] = "connected";
+			pthread_mutex_unlock(&client_mutex);
+			continue;
+		}
+		
+		else if ( (ClientsMap[getpid()] != "connected") && (strcmp(CMD, "quit") != 0) )
+		{   // se ejecuta si trata de hacer algo distinto de connect y no está conectado
+			printf("[!] Error, el cliente PID %d no está conectado. Conéctese para ejecutar los otros comandos.\n", (int)getpid());
+			pthread_mutex_unlock(&client_mutex);
 			continue;
 		}
 
 		else if (strcmp(CMD, "disconnect") == 0)    // desconectarse del servidor
 		{
 			unlink((const char*)(struct sockaddr*)&addr);
-			printf("Disconnected from server\n");
+			printf("Client PID %d disconnected from server\n", getpid());
+			strcpy(buffer, "disconnect:null:null");
+			send(my_socket, buffer, sizeof(buffer), 0);
+			
+			ClientsMap[getpid()] = "disconnected";
+			pthread_mutex_unlock(&client_mutex);
+			continue;
 		}
 		
 		else if (strcmp(CMD, "quit") == 0)  // terminar programa
 		{
 			unlink((const char*)(struct sockaddr*)&addr);
-			return 0;
+			//kill(getpid(), 1);  // revisar
+			break;  // por si acaso el thread no muere? quizás cuando es el último?
 		}
 		
 		else if (strstr(CMD, "insert") != nullptr)
@@ -83,7 +98,7 @@ int main(int argc, char** argv)
 				strcpy(inputVals[0], "insert_1");
 				strcpy(inputVals[1], strtok(CMD, "("));
 				strcpy(inputVals[1], strtok(NULL, ")"));  // <value>
-				strcpy(inputVals[2], "<null>");    // no existe segundo argumento de la instrucción insert(value). Para que el servidor cache, se vuelve "<null>" por convención
+				strcpy(inputVals[2], "null");    // no existe segundo argumento de la instrucción insert(value). Para que el servidor cache, se vuelve "null" por convención
 			}
 			
 			else   // dos argumentos: insert(key, value)
@@ -100,7 +115,7 @@ int main(int argc, char** argv)
 			strcpy(inputVals[0], "get");
 			strcpy(inputVals[1], strtok(CMD, "("));
 			strcpy(inputVals[1], strtok(NULL, ")"));
-			strcpy(inputVals[2], "<null>");
+			strcpy(inputVals[2], "null");
 		}
 		
 		else if (strstr(CMD, "peek") != nullptr)    // CMD ~ peek(<key>)
@@ -108,7 +123,7 @@ int main(int argc, char** argv)
 			strcpy(inputVals[0], "peek");
 			strcpy(inputVals[1], strtok(CMD, "("));
 			strcpy(inputVals[1], strtok(NULL, ")"));
-			strcpy(inputVals[2], "<null>");
+			strcpy(inputVals[2], "null");
 		}
 		
 		else if (strstr(CMD, "update") != nullptr)   // CMD ~ update(<key>, <value>)
@@ -117,38 +132,49 @@ int main(int argc, char** argv)
 			strcpy(inputVals[1], strtok(CMD, "("));
 			strcpy(inputVals[1], strtok(NULL, ","));
 			strcpy(inputVals[2], strtok(NULL, ")"));
+			// [TEST]
+			printf("%s(<%s>,<%s>)", inputVals[0], inputVals[1], inputVals[2]);
 		}
 		
 		else if (strstr(CMD, "delete") != nullptr)
-		{			
+		{	// CMD ~ delete(<key>)
 			strcpy(inputVals[0], "delete");
 			strcpy(inputVals[1], strtok(CMD, "("));
-			strcpy(inputVals[1], strtok(NULL, ","));
-			strcpy(inputVals[2], strtok(NULL, ")"));
+			strcpy(inputVals[1], strtok(NULL, ")"));
+			strcpy(inputVals[2], "null");
 		}
 		
 		else if (strcmp(CMD, "list") == 0)
 		{
 			strcpy(inputVals[0], "list");
-			strcpy(inputVals[1], "<null>");
-			strcpy(inputVals[2], "<null>");
+			strcpy(inputVals[1], "null");
+			strcpy(inputVals[2], "null");
 		}
 				
 		else
 		{
-			printf("[!] Error, comando \"%s\" no reconocido (use minísculas, por favor, caballero)\n", CMD);
+			printf("[!] Error, comando \"%s\" no reconocido (use minísculas y sin espacios dentro de lo posible, por favor, caballero)\n", CMD);
+			pthread_mutex_unlock(&client_mutex);
+			continue;
 		}
 		
+		sprintf(inputVals[3], "%d", getpid());
+		
 		/*--- PONIENDO LA PETICIÓN DEL CLIENTE EN EL BUFFER HACIA EL SERVIDOR ---*/
-		sprintf(buffer, "%s:%s:%s", inputVals[0], inputVals[1], inputVals[2]);
+		sprintf(buffer, "%s:%s:%s:%s", inputVals[0], inputVals[1], inputVals[2], inputVals[3]);
+		
+		
 		/*
-			FORMATO BUFFER DESDE CLIENTE:
-			<comando_cliente>:<argumento1_instrucc>:<argumento2_instrucc>
+		printf("[test] inputVals: (to buffer)\n");
+		temp_aux = (char*)malloc(sizeof(char)*1000);
+		sprintf(temp_aux, "%s\n%s\n%s\n%s", inputVals[0], inputVals[1], inputVals[2], inputVals[3]);
+		mycolor.print_charasterisco("red", temp_aux);
+		free(temp_aux);
 		*/
 		
 		send_status = send(my_socket, buffer, sizeof(inputVals), 0);
 		
-		cout << "  (i) Client wrote on buffer \"" << buffer << "\" with status " << send_status << "\n" << endl;
+		///printf("Client wrote on buffer \"%s\" with status %d\n", buffer, send_status);
 		
 		if (send_status == -1)
 		{
@@ -158,7 +184,8 @@ int main(int argc, char** argv)
 		
 		
 		/*--- ESPERANDO RESPUESTA DEL SERVIDOR ---*/
-		cout << "\033[1;36mAwaiting server answer...\033[0m" << endl;
+		//mycolor.print_str("cyan", "Awaiting server answer...");  //cout << "\033[1;36mAwaiting server answer...\033[0m" << endl;
+		printf("\nAwaiting server answer...\n");
 		read_status = read(my_socket, buffer, sizeof(buffer));
 		//read_status = listen(my_socket, MAX_CONNECTIONS);
 		if (read_status == -1)
@@ -166,9 +193,10 @@ int main(int argc, char** argv)
 			perror("Socket read error in client");
 			return 1;
 		}
-		cout << "  (i) Client read server answer \"" << buffer << "\"\n" << endl;
+		printf("Server answered:\n");
+		mycolor.print_str("yellow", (char*)buffer);
 		
-		//pthread_mutex_unlock(&client_mutex);
+		pthread_mutex_unlock(&client_mutex);
 	}
 
 	return 0;	
