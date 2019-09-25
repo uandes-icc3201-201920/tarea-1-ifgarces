@@ -21,7 +21,7 @@ int my_socket = socket(AF_UNIX, SOCK_STREAM, 0);
 ColorMaster mycolor = ColorMaster();  // para imprimir colores
 
 // diccionario con PIDs y estado (conectado/desconectado del servidor).
-map<pid_t, string> ClientsMap;
+map<int, string> ClientsMap;  // contiene { <socket>, <estado de conexión> } para cada cliente
 
 
 int main(int argc, char** argv)
@@ -40,10 +40,11 @@ int main(int argc, char** argv)
 	char buffer[BUFF_SIZE];
 	int read_status, send_status;
 	pthread_mutex_t client_mutex = PTHREAD_MUTEX_INITIALIZER;
+	pthread_cond_t request_processed_by_server = PTHREAD_COND_INITIALIZER;
 	
 	char CMD[200] = "";
 	char inputVals[4][50] = {};  // formato: { comando_cliente, argumento1_instrucc, argumento2_instrucc, clientePID }
-	char* temp_aux;
+	//char* temp_aux;
 	
 	while (strcmp(CMD, "quit") != 0)
 	{
@@ -65,7 +66,7 @@ int main(int argc, char** argv)
 			continue;
 		}
 		
-		else if ( (ClientsMap[getpid()] != "connected") && (strcmp(CMD, "quit") != 0) )
+		else if ( (ClientsMap[getpid()] == "disconnected") && (strcmp(CMD, "quit") != 0) )
 		{   // se ejecuta si trata de hacer algo distinto de connect y no está conectado
 			printf("[!] Error, el cliente PID %d no está conectado. Conéctese para ejecutar los otros comandos.\n", (int)getpid());
 			pthread_mutex_unlock(&client_mutex);
@@ -158,19 +159,10 @@ int main(int argc, char** argv)
 			continue;
 		}
 		
-		sprintf(inputVals[3], "%d", getpid());
+		sprintf(inputVals[3], "%d", pthread_self());
 		
 		/*--- PONIENDO LA PETICIÓN DEL CLIENTE EN EL BUFFER HACIA EL SERVIDOR ---*/
 		sprintf(buffer, "%s:%s:%s:%s", inputVals[0], inputVals[1], inputVals[2], inputVals[3]);
-		
-		
-		/*
-		printf("[test] inputVals: (to buffer)\n");
-		temp_aux = (char*)malloc(sizeof(char)*1000);
-		sprintf(temp_aux, "%s\n%s\n%s\n%s", inputVals[0], inputVals[1], inputVals[2], inputVals[3]);
-		mycolor.print_charasterisco("red", temp_aux);
-		free(temp_aux);
-		*/
 		
 		send_status = send(my_socket, buffer, sizeof(inputVals), 0);
 		

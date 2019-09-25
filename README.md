@@ -1,6 +1,6 @@
 ﻿# Informe - Tarea 1-2
 Ignacio F. Garcés Santander
-(Se me olvidó que era en parejas, me acordé el último día. Favor no bajarme puntaje por eso.)
+(Se me olvidó que era en parejas, me acordé el último día en la noche. Acabo de notar que me agregaron una pareja aleatoria, pero la persona no me contactó ni yo a él porque yo no sabía. Hice la tarea yo solo.)
 
 
 ### 1. DIFICULTADES ENCONTRADAS
@@ -19,10 +19,16 @@ Ignacio F. Garcés Santander
 
 
 ### 4. FUNCIONAMIENTO (EXTRA)
-El cliente le envía las instrucciones al buffer (char) en el formato siguiente:
+- El cliente le envía las instrucciones al buffer (char) en el formato siguiente:
 
-"<nombre_instrucción>:<argumento1>:<argumento2>:<threadID_cliente_que_mandó_petición>"
+`"<nombre_instrucción>:<argumento1>:<argumento2>"`
 
 donde los argumentos son los parámetros que requiera esa función. Si no requiere alguno, se vuelve "null". Entonces, el servidor reconoce lo que el cliente quiere haciendo split (strtok) con ":". Luego, la respuesta del servidor se imprime en el cliente en color amarillo.
 
-El tamaño máximo (número de caracteres) del buffer es de BUFF_SIZE. La cantidad máxima de clientes que pueden conectarse es MAX_CONNECTIONS. La cantidad máxima de pares clave valor que se pueden colocar es DATABASE_SIZE.
+- El tamaño máximo (número de caracteres) del buffer es de BUFF_SIZE. La cantidad máxima de clientes que pueden conectarse es MAX_CONNECTIONS. La cantidad máxima de pares clave valor que se pueden colocar es DATABASE_SIZE.
+
+- En client.cpp, hay un diccionario de la forma:
+
+map<int socketID, string status> ClientsMap
+
+donde socketID es el socket por el cual está conectado al servidor, y status puede ser "connected" si está conectado y no ha mandado una petición al servidor aún, "disconnected" si está desconectado, y "processing" si se está procesando la su solicitud dentro de process_client_request en server.cpp.

@@ -15,13 +15,160 @@
 
 using namespace std;
 
-KVStore DB;   // map<int, char*>
+KVStore DB;  // map<int, char*>
 
 char socket_path[200];
 int my_socket = socket(AF_UNIX, SOCK_STREAM, 0);
+
+pthread_t ServerThreads[MAX_CONNECTIONS];
+map<int, string> ClientsMap;  // contiene { <socket>, <estado de conexión> } para cada cliente
+
 ColorMaster mycolor = ColorMaster();  // para imprimir colores
 
-map<pid_t, string> ClientsMap;
+char buffer[BUFF_SIZE];
+char decode[3][150] = {};    // forma: { <nombre_instrucción>, <arg1>, <arg2> }
+pthread_mutex_t server_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+
+
+int process_client_request(int* client_socket)
+{
+	pthread_mutex_lock(&server_mutex);
+	char* aux = (char*)malloc(sizeof(char*)*500);
+	printf("\nAwaiting instructions from client...\n");
+	int read_status = read(client_socket, buffer, sizeof(buffer));
+	
+	if (read_status < 0) { break; }
+	if (read_status == -1) { perror("Socket read error in server"); return 1; }
+	if (read_status == 0) { perror("Connection closed"); close(client_socket); return 1; }  // retorna?
+	
+	printf("Server read from buffer:\n");
+	string auxStr(buffer);
+	mycolor.print_str("yellow", auxStr);
+	
+	/* Leyendo buffer, separando args por : dados por el cliente */
+	aux = strtok(buffer, ":");
+	if (aux != NULL) { strcpy(decode[0], aux); }   // con el separador ":" el servidor reconoce qué comando y con qué parámetros el cliente lo puso en el buffer
+	int j = 1;
+	while (true)
+	{
+		aux = strtok(NULL, ":");
+		if (aux == NULL) { break; }
+		strcpy(decode[j], aux);
+		j++;
+	}
+	
+	/*--- EJECUTANDO COMANDOS DEL CLIENTE ---*/
+	char server_answer[BUFF_SIZE] = "";
+	
+	/* (1°) COMANDO: insert(value) */
+	if (strcmp(decode[0], "insert_1") == 0)
+	{   // decode ~ { insert_1, <value>, null }
+		if (! KV_searchKey(&DB, atoi(decode[1])) )
+		{
+			sprintf(server_answer, "%d", KV_append(&DB, (char*)decode[1]));
+		}
+		else
+		{   // si la llave ya existe, asignada a un valor, no se puede. Tendría que usar update.
+			sprintf(server_answer, "[!] Error, ya existe la llave %s en la base de datos.", decode[1]);
+		}
+	}
+	
+	/* (2°) COMANDO: insert(key, value) */
+	else if (strcmp(decode[0], "insert_2") == 0)
+	{   // decode ~ { insert_2, <key>, <value> }
+		if (! KV_searchKey(&DB, atoi(decode[1])) )
+		{
+			DB[atoi(decode[1])] = (char*)malloc(sizeof(decode[2]));
+			strcpy(DB[atoi(decode[1])], decode[2]);  //DB[atoi(decode[1])] = (char*)decode[2];
+		}
+		else
+		{
+			sprintf(server_answer, "[!] Error, ya existe un par llave-valor con la misma llave");
+		}
+		
+	}
+	
+	/* (3°) COMANDO: get(key) */
+	else if (strcmp(decode[0], "get") == 0)
+	{   // decode ~ { get, <key>, null }
+		if (! KV_searchKey(&DB, atoi(decode[1])) )
+		{
+			sprintf(server_answer, "[!] Error, la llave %s no existe en la base de datos", decode[1]);
+		}
+		else
+		{
+			sprintf(server_answer, "%s", DB[atoi(decode[1])]);
+		}
+	}
+	
+	/* (4°) COMANDO: peek(value) */
+	else if (strcmp(decode[0], "peek") == 0)
+	{   // decode ~ { peek, <value>, null }
+		if (! KV_searchKey(&DB, atoi(decode[1])) )
+		{
+			sprintf(server_answer, "false");
+		}
+		else
+		{
+			sprintf(server_answer, "true");
+		}
+	}
+	
+	/* (5°) COMANDO: update(key, value) */
+	else if (strcmp(decode[0], "update") == 0)
+	{   // decode ~ { update, <key>, <value> }
+		if ( ! KV_searchKey(&DB, atoi(decode[1])) )
+		{
+			sprintf(server_answer, "[!] Error, la llave %s no existe en la base de datos", decode[1]);
+		}
+		else
+		{
+			DB[atoi(decode[1])] = (char*)malloc(sizeof(decode[2]));
+			strcpy(DB[atoi(decode[1])], decode[2]);  //DB[atoi(decode[1])] = (char*)decode[2];
+		}
+	}
+	
+	/* (6°) COMANDO: delete(key) */
+	else if (strcmp(decode[0], "delete") == 0)
+	{   // decode ~ { delete, <key>, null }
+		if (! KV_searchKey(&DB, atoi(decode[1])) )
+		{
+			sprintf(server_answer, "[!] Error, la llave %s no existe en la base de datos", decode[1]);
+		}
+		else
+		{
+			DB.erase(atoi(decode[1]));
+		}
+	}
+	
+	/* (7°) COMANDO: list */
+	else if (strcmp(decode[0], "list") == 0)
+	{   // decode ~ { list, null, null }
+		strcpy(server_answer, KV_get_printable(&DB, 500));
+		//printf("%s\n", server_answer);  // [TEST]
+		
+		if (strlen(server_answer) > BUFF_SIZE)
+		{
+			printf("[!] Error, buffer overflow: server_answer is too large: %s (lenght: %d)", server_answer, (int)strlen(server_answer));
+			return 1;
+		}
+	}
+	
+	// en este punto hizo lo que el cliente pidió y lo puso en server_answer -
+	// para colocarlo a continuación en el buffer y mandar la respuesta.
+	strcpy(buffer, server_answer);
+	send_status = send(client_socket, buffer, sizeof(buffer), 0);
+	if (send_status == -1)
+	{
+		perror("Socket send error in server");
+		return 1;
+	}
+	///printf("Server answered on buffer \"%s\"\n", buffer);
+	return 0;
+}
+
+
 
 int main(int argc, char** argv)
 {
@@ -70,12 +217,13 @@ int main(int argc, char** argv)
 
 	
 	/*--- COMIENZA CICLO PARA PROCESAR INSTRUCCIONES DE LOS CLIENTES ---*/
-	char buffer[BUFF_SIZE];
+	
 	int new_socket, read_status, send_status;
 	int j;
-	char decode[4][150] = {}; // forma: { tipo_instrucción, arg1, arg2 }
+	
 	char server_answer[BUFF_SIZE] = "";
 	char* aux = (char*)malloc(sizeof(char*)*500);
+	int serverThreadsNum = 1;
 	
 	while (true)  // siempre está esperando la conexión de algún cliente
 	{
@@ -92,144 +240,9 @@ int main(int argc, char** argv)
 		
 		while (true)  // ciclo para procesar instrucciones mientras el cliente esté conectado
 		{
-			//mycolor.print_str("cyan", "\nAwaiting instructions from client...");   //printf("\033[1;36mAwaiting instructions from client...\033[0m\n");
-			printf("\nAwaiting instructions from client...\n");
-			read_status = read(new_socket, buffer, sizeof(buffer));
-			//read_status = listen(my_socket, MAX_CONNECTIONS);
-			//read_status = receive(new_socket, buffer, sizeof(buffer), 0);
-			
-			if (read_status < 0) { break; }
-			if (read_status == -1) { perror("Socket read error in server"); return 1; }
-			if (read_status == 0) { perror("Connection closed"); close(new_socket); return 1; }  // retorna?
-			
-			printf("Server read from buffer:\n");
-			string auxStr(buffer);
-			mycolor.print_str("yellow", auxStr);
-			
-			/* Leyendo buffer, separando args por : dados por el cliente */
-			aux = strtok(buffer, ":");
-			if (aux != NULL)
-			{
-				strcpy(decode[0], aux);   // con el separador ":" el servidor reconoce qué comando y con qué parámetros el cliente lo puso en el buffer
-			}
-			j=1;
-			while (true)
-			{
-				aux = strtok(NULL, ":");
-				if (aux == NULL) { break; }
-				strcpy(decode[j], aux);
-				j++;
-			}
-			
-			/*--- EJECUTANDO COMANDOS DEL CLIENTE ---*/
-			
-			strcpy(server_answer, "");   // vacía la respuesta para rellenarla con los elementos.
-			
-			/* (1°) COMANDO: insert(value) */
-			if (strcmp(decode[0], "insert_1") == 0)
-			{   // decode ~ { insert_1, <value>, null, PID }
-				if (! KV_searchKey(&DB, atoi(decode[1])) )
-				{
-					sprintf(server_answer, "%d", KV_append(&DB, (char*)decode[1]));
-				}
-				else
-				{   // si la llave ya existe, asignada a un valor, no se puede. Tendría que usar update.
-					sprintf(server_answer, "[!] Error, ya existe la llave %s en la base de datos.", decode[1]);
-				}
-			}
-			
-			/* (2°) COMANDO: insert(key, value) */
-			else if (strcmp(decode[0], "insert_2") == 0)
-			{   // decode ~ { insert_2, <key>, <value>, PID }
-				if (! KV_searchKey(&DB, atoi(decode[1])) )
-				{
-					DB[atoi(decode[1])] = (char*)malloc(sizeof(decode[2]));
-					strcpy(DB[atoi(decode[1])], decode[2]);  //DB[atoi(decode[1])] = (char*)decode[2];
-				}
-				else
-				{
-					sprintf(server_answer, "[!] Error, ya existe un par llave-valor con la misma llave");
-				}
-				
-			}
-			
-			/* (3°) COMANDO: get(key) */
-			else if (strcmp(decode[0], "get") == 0)
-			{   // decode ~ { get, <key>, null, PID }
-				if (! KV_searchKey(&DB, atoi(decode[1])) )
-				{
-					sprintf(server_answer, "[!] Error, la llave %s no existe en la base de datos", decode[1]);
-				}
-				else
-				{
-					sprintf(server_answer, "%s", DB[atoi(decode[1])]);
-				}
-			}
-			
-			/* (4°) COMANDO: peek(value) */
-			else if (strcmp(decode[0], "peek") == 0)
-			{   // decode ~ { peek, <value>, null, PID }
-				if (! KV_searchKey(&DB, atoi(decode[1])) )
-				{
-					sprintf(server_answer, "false");
-				}
-				else
-				{
-					sprintf(server_answer, "true");
-				}
-			}
-			
-			/* (5°) COMANDO: update(key, value) */
-			else if (strcmp(decode[0], "update") == 0)
-			{   // decode ~ { update, <key>, <value>, PID }
-				if ( ! KV_searchKey(&DB, atoi(decode[1])) )
-				{
-					sprintf(server_answer, "[!] Error, la llave %s no existe en la base de datos", decode[1]);
-				}
-				else
-				{
-					DB[atoi(decode[1])] = (char*)malloc(sizeof(decode[2]));
-					strcpy(DB[atoi(decode[1])], decode[2]);  //DB[atoi(decode[1])] = (char*)decode[2];
-				}
-			}
-			
-			/* (6°) COMANDO: delete(key) */
-			else if (strcmp(decode[0], "delete") == 0)
-			{   // decode ~ { delete, <key>, null, PID }
-				if (! KV_searchKey(&DB, atoi(decode[1])) )
-				{
-					sprintf(server_answer, "[!] Error, la llave %s no existe en la base de datos", decode[1]);
-				}
-				else
-				{
-					DB.erase(atoi(decode[1]));
-				}
-			}
-			
-			/* (7°) COMANDO: list */
-			else if (strcmp(decode[0], "list") == 0)
-			{   // decode ~ { list, null, null, PID }
-				strcpy(server_answer, KV_get_printable(&DB, 500));
-				//printf("%s\n", server_answer);  // [TEST]
-				
-				if (strlen(server_answer) > BUFF_SIZE)
-				{
-					printf("[!] Error, buffer overflow: server_answer is too large: %s (lenght: %d)", server_answer, (int)strlen(server_answer));
-					return 1;
-				}
-			}
-			
-			// a este punto hizo lo que el cliente pidió y lo puso en server_answer -
-			// para colocarlo a continuación en el buffer y mandar la respuesta.
-			strcpy(buffer, server_answer);
-			send_status = send(new_socket, buffer, sizeof(buffer), 0);
-			//send_status = write(new_socket, buffer, strlen(buffer));
-			if (send_status == -1)
-			{
-				perror("Socket send error in server");
-				return 1;
-			}
-			///printf("Server answered on buffer \"%s\"\n", buffer);
+			ClientsMap.insert( pair<int, string>(new_socket, "connected") );
+			pthread_create(&ServerThreads[serverThreadsNum-1], NULL, int (process_client_request)(int*), &new_socket);
+			serverThreadsNum++;
 		}
 		printf("The server does not detect any connection\n");
 	}
