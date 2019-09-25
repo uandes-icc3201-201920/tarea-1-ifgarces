@@ -12,14 +12,14 @@ delete_socket:
 clean: delete_socket
 	rm -f client server timer *.exe.stackdump *.o *.exe
 	
-runs: clean
-	g++ -o server server.cpp $(MYFLAGS)
-	./server
+# runs: clean
+	# g++ -o server server.cpp $(MYFLAGS)
+	# ./server
 
-runc: clean
-	g++ -o client client.cpp $(MYFLAGS)
-	./client
+# runc: clean
+	# g++ -o client client.cpp $(MYFLAGS)
+	# ./client
 	
-test: clean
-	g++ -o T TEST.cpp $(MYFLAGS)
-	./T
+# test: clean
+	# g++ -o T TEST.cpp $(MYFLAGS)
+	# ./T
