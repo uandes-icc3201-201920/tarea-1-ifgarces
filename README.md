@@ -3,7 +3,6 @@ Ignacio F. Garcés Santander
 
 
 ### 0. COMANTERIOS
-* Se me olvidó que era en parejas, me acordé el último día a as 10 de la noche. Acabo de notar que me agregaron una pareja aleatoria, no lo contacté porque no sabía, pero la persona tampoco no me contactó. Hice la tarea yo solo.
 ** No alcancé a probarlo en Linux por temas de tiempo y porque el computador se queda pegado la mayoría de las veces al abrir la máquina virtual con Linux, y si es que funciona, toma como 10 minutos abrirlo, y tengo que cerrar todos los otros procesos del computador para que medio aguante, lo que dificulta enormemente el trabajo. Por favor considerar en caso de que no funcione bien en Linux. Considerar también ojalá que lo hice solo.
 
 
